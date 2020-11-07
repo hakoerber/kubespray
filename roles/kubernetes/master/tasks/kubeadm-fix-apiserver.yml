@@ -1,13 +1,21 @@
 ---
+- debug:
+    msg: "{{ kube_apiserver_endpoint }}"
 - name: Test if correct apiserver is set in all kubeconfigs
   shell: >-
-    grep -Fq "{{ kube_apiserver_endpoint }}" {{ kube_config_dir }}/admin.conf &&
-    grep -Fq "{{ kube_apiserver_endpoint }}" {{ kube_config_dir }}/controller-manager.conf &&
-    grep -Fq "{{ kube_apiserver_endpoint }}" {{ kube_config_dir }}/kubelet.conf &&
-    grep -Fq "{{ kube_apiserver_endpoint }}" {{ kube_config_dir }}/scheduler.conf
+    grep -q "^\s*server: {{ kube_apiserver_endpoint }}$" {{ kube_config_dir }}/admin.conf &&
+    grep -q "^\s*server: {{ kube_apiserver_endpoint }}$" {{ kube_config_dir }}/kubelet.conf &&
+    grep -q "^\s*server: https://{{ ip | default(fallback_ips[inventory_hostname]) }}:{{ kube_apiserver_port }}$" {{ kube_config_dir }}/scheduler.conf &&
+    grep -q "^\s*server: https://{{ ip | default(fallback_ips[inventory_hostname]) }}:{{ kube_apiserver_port }}$" {{ kube_config_dir }}/controller-manager.conf
   register: kubeconfig_correct_apiserver
   changed_when: False
   failed_when: False
+
+  # this is simply WRONG. the scheduler and KCM do NOT use the
+  # apiserver_endpoint (which might be loadbalanced) but the local API
+  # endpoint, Relevant issues:
+  #
+  # - https://github.com/kubernetes/kubernetes/pull/94398
 
 - name: Create temporary directory
   tempfile:
@@ -21,6 +29,20 @@
     --config {{ kube_config_dir }}/kubeadm-config.yaml
     --kubeconfig-dir {{ kubeconfig_temp_dir.path }}
   when: kubeconfig_correct_apiserver.rc != 0
+
+# - name: Patch wrong server URL in scheduler.conf and controller-manager.conf
+#   replace:
+#     path: "{{ kubeconfig_temp_dir.path }}/controller-manager.conf"
+#     regexp: '^(\s*server: ).*$'
+#     replace: '\1{{ kube_apiserver_endpoint }}'
+#   when: kubeconfig_correct_apiserver.rc != 0
+
+# - name: Patch wrong server URL in scheduler.conf and controller-manager.conf
+#   replace:
+#     path: "{{ kubeconfig_temp_dir.path }}/scheduler.conf"
+#     regexp: '^(\s*server: ).*$'
+#     replace: '\1{{ kube_apiserver_endpoint }}'
+#   when: kubeconfig_correct_apiserver.rc != 0
 
 - name: Copy new kubeconfigs to kube config dir
   copy:
