@@ -56,8 +56,7 @@
     kubeconfig admin
     --kubeconfig-dir {{ kube_config_dir }}/external_kubeconfig
     --cert-dir {{ kube_cert_dir }}
-    --apiserver-advertise-address {{ external_apiserver_address }}
-    --apiserver-bind-port {{ external_apiserver_port }}
+    --control-plane-endpoint {{ apiserver_loadbalancer_domain_name }}
     >/dev/null && cat {{ kube_config_dir }}/external_kubeconfig/admin.conf &&
     rm -rf {{ kube_config_dir }}/external_kubeconfig
   environment: "{{ proxy_env }}"
